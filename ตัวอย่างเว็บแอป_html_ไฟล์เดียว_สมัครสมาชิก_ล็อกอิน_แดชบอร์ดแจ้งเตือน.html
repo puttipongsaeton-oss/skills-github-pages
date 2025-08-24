@@ -1,0 +1,306 @@
+<!--
+IMPORTANT:
+ไฟล์นี้คือ Client (สำหรับ GitHub Pages)
+ด้านล่างมีสคริปต์ฝั่งเซิร์ฟเวอร์ (Google Apps Script) ให้คัดลอกไปวางใน https://script.google.com/ แล้ว Deploy เป็น Web app
+จากนั้นเอา URL ที่ได้มาใส่ในตัวแปร GAS_URL ด้านล่างนี้
+-->
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>เครื่องตรวจจับควัน — สมัครสมาชิก / แจ้งเตือน (GitHub Pages + Google Sheets/Drive)</title>
+  <style>
+    :root{ --bg:#0b1020; --card:#131a2e; --muted:#7f8aa3; --text:#e6ebff; --primary:#5b8cff; --danger:#ff6b6b; --ok:#37d399; --shadow:0 10px 30px rgba(0,0,0,.25); }
+    *{box-sizing:border-box} html,body{height:100%} body{ margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans Thai", sans-serif; background: radial-gradient(1200px 600px at 20% -10%, #1a2550 0%, rgba(26,37,80,0) 60%), radial-gradient(1200px 600px at 120% 10%, #2a3366 0%, rgba(42,51,102,0) 60%), var(--bg); color:var(--text); }
+    .container{max-width:1100px;margin-inline:auto;padding:24px}
+    .nav{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-bottom:20px}
+    .brand{display:flex;gap:10px;align-items:center}
+    .brand .logo{width:36px;height:36px;border-radius:10px;background:conic-gradient(from 140deg at 70% 30%, #5b8cff, #7a9cff 40%, #37d399 60%, #ff6b6b 80%, #5b8cff); box-shadow:var(--shadow)}
+    .tabs{display:flex;gap:8px;flex-wrap:wrap}
+    button,.btn{background:transparent;color:var(--text);border:1px solid rgba(255,255,255,.15);padding:10px 14px;border-radius:12px;cursor:pointer}
+    button:hover,.btn:hover{border-color:rgba(255,255,255,.35)}
+    .btn.primary{background:linear-gradient(180deg, rgba(91,140,255,.25), rgba(91,140,255,.1));border-color:#5b8cff}
+    .btn.danger{background:linear-gradient(180deg, rgba(255,107,107,.25), rgba(255,107,107,.1));border-color:#ff6b6b}
+    .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px}
+    .card{grid-column:span 12;background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01)); border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:18px;box-shadow:var(--shadow)}
+    @media(min-width:900px){.span-4{grid-column:span 4}.span-6{grid-column:span 6}.span-8{grid-column:span 8}.span-12{grid-column:span 12}}
+    .muted{color:var(--muted)} label{display:block;margin:10px 0 6px}
+    input,select{width:100%;padding:12px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.04);color:var(--text)}
+    input::file-selector-button{border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.06);color:var(--text);padding:8px 10px;border-radius:10px;margin-right:10px}
+    .row{display:flex;gap:10px;flex-wrap:wrap} .row>*{flex:1 1 220px}
+    .alert{padding:12px 14px;border-radius:12px;display:flex;justify-content:space-between;align-items:center}
+    .alert.ok{border:1px solid rgba(55,211,153,.4);background:rgba(55,211,153,.12)} .alert.danger{border:1px solid rgba(255,107,107,.35);background:rgba(255,107,107,.12)}
+    .hidden{display:none!important} .table{width:100%;border-collapse:collapse}
+    .table th,.table td{padding:10px;border-bottom:1px dashed rgba(255,255,255,.15);text-align:left}
+    .kbd{font-family:ui-monospace, SFMono-Regular, Menlo, monospace;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);padding:2px 6px;border-radius:6px}
+    .tip{font-size:.92rem;color:#b8c4ff} .error{color:#ffb4b4;font-size:.92rem}
+    details#tests summary{cursor:pointer} .pass{color:#37d399} .fail{color:#ff6b6b}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <nav class="nav">
+      <div class="brand">
+        <div class="logo" aria-hidden="true"></div>
+        <div>
+          <strong>เครื่องตรวจจับควัน (Demo ทางการ)</strong>
+          <div class="muted" style="font-size:.9rem">GitHub Pages + Google Apps Script (Sheets/Drive)</div>
+        </div>
+      </div>
+      <div class="tabs">
+        <button class="btn" data-view="signup">สมัครสมาชิก</button>
+        <button class="btn" data-view="login">เข้าสู่ระบบ</button>
+        <button class="btn primary" data-view="dashboard">แดชบอร์ด</button>
+      </div>
+    </nav>
+
+    <div id="systemStatus" class="alert ok">
+      <div><strong>สถานะระบบ:</strong> พร้อมใช้งาน</div>
+      <div class="muted">Client: Static (GitHub Pages) • Server: Google Apps Script</div>
+    </div>
+
+    <div class="grid" style="margin-top:16px">
+      <section id="view-signup" class="card span-8">
+        <h2>สมัครสมาชิก</h2>
+        <p class="muted">ข้อมูลจะถูกบันทึกลง Google Sheets (สเปรดชีตและชีทที่กำหนด) และรูปจะถูกเก็บใน Google Drive โฟลเดอร์ที่กำหนด</p>
+        <form id="signupForm">
+          <div class="row">
+            <div>
+              <label>ชื่อผู้ใช้ <span class="muted">(≥ 3 ตัวอักษร)</span></label>
+              <input name="username" minlength="3" required />
+            </div>
+            <div>
+              <label>รหัสผ่าน <span class="muted">(≥ 6 ตัวอักษร)</span></label>
+              <input name="password" type="password" minlength="6" required />
+            </div>
+          </div>
+          <div class="row">
+            <div>
+              <label>อีเมล</label>
+              <input name="email" type="email" required />
+            </div>
+            <div>
+              <label>ชื่อสถานที่</label>
+              <input name="place" required />
+            </div>
+          </div>
+          <div class="row">
+            <div>
+              <label>แนบไฟล์สถานที่ (PNG หรือ PDF)</label>
+              <input name="attachment" type="file" accept="image/png,application/pdf" />
+              <div class="muted" style="margin-top:6px">* จะอัปโหลดไฟล์ไปยัง Google Drive โฟลเดอร์ที่ตั้งค่าไว้ใน Apps Script</div>
+            </div>
+          </div>
+          <div class="row" style="align-items:center">
+            <button class="btn primary" type="submit">สร้างบัญชี</button>
+            <span id="signupMsg" class="tip"></span>
+          </div>
+        </form>
+        <p class="tip" style="margin-top:12px">หมายเหตุ: เพื่อความปลอดภัย จะส่ง <span class="kbd">password hash (SHA‑256)</span> ไปเก็บ ไม่ใช่รหัสผ่านดิบ</p>
+      </section>
+
+      <section id="view-profile" class="card span-4">
+        <h3>โปรไฟล์ผู้ใช้</h3>
+        <div id="profileBox" class="muted">ยังไม่ได้เข้าสู่ระบบ</div>
+        <div id="profileActions" class="hidden" style="margin-top:12px">
+          <button class="btn" id="btnEditProfile">แก้ไขข้อมูล (local)</button>
+          <button class="btn danger" id="btnLogout">ออกจากระบบ</button>
+        </div>
+      </section>
+
+      <section id="view-login" class="card span-6">
+        <h2>เข้าสู่ระบบ</h2>
+        <form id="loginForm">
+          <label>ชื่อผู้ใช้</label>
+          <input name="username" required />
+          <label>รหัสผ่าน</label>
+          <input name="password" type="password" required />
+          <div class="row" style="align-items:center;margin-top:8px">
+            <button class="btn primary" type="submit">ล็อกอิน</button>
+            <span id="loginMsg" class="error"></span>
+          </div>
+        </form>
+        <p class="muted">การล็อกอินจะตรวจสอบกับข้อมูลใน Google Sheets โดยเทียบค่า hash</p>
+      </section>
+
+      <section id="view-dashboard" class="card span-6">
+        <h2>แดชบอร์ดการแจ้งเตือน</h2>
+        <p class="muted">(รอเชื่อมต่อ input จากเครื่องตรวจควันภายหลัง)</p>
+        <div id="realtimeBanner" class="alert ok">
+          <div>
+            <strong id="bannerTitle">ปลอดภัย</strong> — <span id="bannerDetail">ไม่พบเหตุการณ์ผิดปกติ</span>
+          </div>
+          <span class="muted" id="lastUpdated">อัปเดตล่าสุด: —</span>
+        </div>
+        <table class="table" style="margin-top:12px">
+          <thead><tr><th>เวลา</th><th>ประเภท</th><th>รายละเอียด</th></tr></thead>
+          <tbody id="eventTable"></tbody>
+        </table>
+        <div class="row" style="margin-top:10px">
+          <button id="btnSimSmoke" class="btn">จำลอง: ตรวจพบควัน</button>
+          <button id="btnSimNormal" class="btn">จำลอง: กลับสู่ปกติ</button>
+        </div>
+      </section>
+
+      <section id="editProfileCard" class="card span-12 hidden">
+        <h3>แก้ไขโปรไฟล์ (local demo)</h3>
+        <form id="editProfileForm" class="row">
+          <div><label>ชื่อผู้ใช้</label><input name="username" required /></div>
+          <div><label>อีเมล</label><input name="email" type="email" required /></div>
+          <div><label>ชื่อสถานที่</label><input name="place" required /></div>
+          <div><label>แนบไฟล์สถานที่ใหม่ (PNG หรือ PDF)</label><input name="attachment" type="file" accept="image/png,application/pdf" /></div>
+          <div class="row" style="align-items:center"><button class="btn primary" type="submit">บันทึก</button><button class="btn" type="button" id="btnCancelEdit">ยกเลิก</button><span class="tip" id="editMsg"></span></div>
+        </form>
+      </section>
+
+      <section class="card span-12">
+        <details id="tests"><summary>Self‑Tests (คลิกเพื่อเปิด/ปิด)</summary><ul id="testList" style="margin:10px 0 0 0; padding-left:18px"></ul></details>
+      </section>
+    </div>
+
+    <div class="tip">Deployment: อัปไฟล์นี้เป็น <span class="kbd">index.html</span> ไปที่ GitHub Pages • ตั้งค่า Apps Script ตามโค้ดด้านล่าง แล้วใส่ URL ใน <span class="kbd">GAS_URL</span></div>
+  </div>
+
+  <script>
+    // ===== CONFIG (ใส่ URL ของ Web App จาก Google Apps Script ตรงนี้) =====
+    const GAS_URL = 'YOUR_APPS_SCRIPT_WEB_APP_URL'; // เช่น https://script.google.com/macros/s/XXXX/exec
+
+    // ===== Utilities =====
+    const $ = (sel, root=document) => root.querySelector(sel);
+    const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+    const fmtTime = (d=new Date()) => d.toLocaleString('th-TH');
+    const sha256 = async (text) => {
+      const enc = new TextEncoder().encode(text);
+      const buf = await crypto.subtle.digest('SHA-256', enc);
+      return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+    };
+    const toBase64 = (file) => new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(String(r.result).split(',')[1]||''); r.onerror=rej; r.readAsDataURL(file); });
+
+    // ===== Local demo store (สำหรับแสดงผลหน้าเว็บเท่านั้น) =====
+    const LS_USERS='demo_users_v2', LS_SESSION='demo_session_v2', LS_EVENTS='demo_events_v2';
+    const store={
+      getUsers(){return JSON.parse(localStorage.getItem(LS_USERS)||'[]')}, setUsers(xs){localStorage.setItem(LS_USERS,JSON.stringify(xs))},
+      getSession(){return JSON.parse(localStorage.getItem(LS_SESSION)||'null')}, setSession(x){localStorage.setItem(LS_SESSION,JSON.stringify(x))}, clearSession(){localStorage.removeItem(LS_SESSION)},
+      getEvents(){return JSON.parse(localStorage.getItem(LS_EVENTS)||'[]')}, setEvents(xs){localStorage.setItem(LS_EVENTS,JSON.stringify(xs))}
+    };
+
+    // ===== Views =====
+    const views={ signup:$('#view-signup'), login:$('#view-login'), dashboard:$('#view-dashboard') };
+    $$('.tabs [data-view]').forEach(b=>b.addEventListener('click',()=>showView(b.dataset.view)));
+    function showView(name){ Object.values(views).forEach(v=>v.classList.add('hidden')); views[name]?.classList.remove('hidden'); if(name==='dashboard') updateRealtimeUI(); }
+
+    // ===== Signup -> POST ไป Apps Script =====
+    $('#signupForm').addEventListener('submit', async (e)=>{
+      e.preventDefault(); const fd = new FormData(e.currentTarget);
+      const username=(fd.get('username')||'').trim(); const password=(fd.get('password')||''); const email=(fd.get('email')||'').trim(); const place=(fd.get('place')||'').trim(); const file=fd.get('attachment');
+      if(username.length<3 || password.length<6){ const el=$('#signupMsg'); if(el) el.textContent='กรอกข้อมูลให้ครบถ้วนตามเงื่อนไข'; return; }
+      let attachment={name:null,type:null,size:0,base64:null};
+      if(file && file.name){ const ok=['image/png','application/pdf'].includes(file.type); if(!ok){ const el=$('#signupMsg'); if(el) el.textContent='ไฟล์ต้องเป็น PNG หรือ PDF'; return; } attachment={name:file.name,type:file.type,size:file.size,base64:await toBase64(file)} }
+      const passHash = await sha256(password);
+      const payload = { action:'register', username, passHash, email, place, attachment };
+      try{
+        assertGAS();
+        const resp = await fetch(GAS_URL,{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+        const data = await resp.json();
+        if(!resp.ok || !data.ok) throw new Error(data.error||('HTTP '+resp.status));
+        // เก็บ local เพื่อแสดงผลโปรไฟล์ทันที
+        const users=store.getUsers(); const u={id:data.id||crypto.randomUUID(),username,email,place,attachment:attachment.name?{name:attachment.name,type:attachment.type,size:attachment.size}:null}; users.push(u); store.setUsers(users); store.setSession({id:u.id,username:u.username});
+        const el=$('#signupMsg'); if(el) el.textContent='สมัครเสร็จแล้ว และบันทึกลง Sheets/Drive สำเร็จ'; renderProfile(); showView('dashboard'); e.currentTarget.reset(); setTimeout(()=>{const m=$('#signupMsg'); if(m) m.textContent='';},2500);
+      }catch(err){ console.error(err); const el=$('#signupMsg'); if(el) el.textContent='ไม่สำเร็จ: '+err.message; }
+    });
+
+    // ===== Login -> ตรวจสอบกับ Sheets (ผ่าน Apps Script) =====
+    $('#loginForm').addEventListener('submit', async (e)=>{
+      e.preventDefault(); const fd=new FormData(e.currentTarget); const username=(fd.get('username')||'').trim(); const password=(fd.get('password')||''); const passHash=await sha256(password);
+      try{ assertGAS(); const resp=await fetch(GAS_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'login',username,passHash})}); const data=await resp.json(); if(!resp.ok||!data.ok) throw new Error(data.error||('HTTP '+resp.status)); store.setSession({id:data.id,username:data.username}); $('#loginMsg').textContent=''; renderProfile(); showView('dashboard'); }catch(err){ console.error(err); const el=$('#loginMsg'); if(el) el.textContent='ล็อกอินไม่สำเร็จ: '+err.message; }
+    });
+
+    // ===== Profile view (local render) =====
+    function renderProfile(){ const session=store.getSession(); if(!session){ $('#profileBox').innerHTML='ยังไม่ได้เข้าสู่ระบบ'; $('#profileActions').classList.add('hidden'); return; } const u=(store.getUsers().find(x=>x.id===session.id)||{username:session.username,email:'—',place:'—',attachment:null}); const attach=u.attachment?`<div class="pill">ไฟล์: ${u.attachment.name} (${(u.attachment.type||'').split('/')[1]||'?'})</div>`:'<span class="muted">ไม่มีไฟล์แนบ</span>'; $('#profileBox').innerHTML=`<div style="display:flex;flex-direction:column;gap:6px"><div><strong>${u.username}</strong></div><div class="muted">${u.email}</div><div class="muted">สถานที่: ${u.place}</div>${attach}</div>`; $('#profileActions').classList.remove('hidden'); }
+
+    $('#btnLogout').addEventListener('click',()=>{ store.clearSession(); renderProfile(); showView('login'); });
+
+    $('#btnEditProfile').addEventListener('click',()=>{ const s=store.getSession(); if(!s) return; const u=store.getUsers().find(x=>x.id===s.id); if(!u) return; const f=$('#editProfileForm'); f.username.value=u.username; f.email.value=u.email; f.place.value=u.place; $('#editProfileCard').classList.remove('hidden'); window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'}); });
+    $('#btnCancelEdit').addEventListener('click',()=>{ $('#editProfileCard').classList.add('hidden'); const el=$('#editMsg'); if(el) el.textContent=''; });
+    $('#editProfileForm').addEventListener('submit', async (e)=>{ e.preventDefault(); const s=store.getSession(); if(!s) return; const users=store.getUsers(); const idx=users.findIndex(x=>x.id===s.id); if(idx<0) return; const fd=new FormData(e.currentTarget); const file=fd.get('attachment'); if(file && file.name){ const ok=['image/png','application/pdf'].includes(file.type); if(!ok){ const el=$('#editMsg'); if(el) el.textContent='ไฟล์ต้องเป็น PNG หรือ PDF'; return; } } users[idx]={...users[idx], username:fd.get('username'), email:fd.get('email'), place:fd.get('place'), attachment:(file&&file.name)?{name:file.name,type:file.type,size:file.size}:users[idx].attachment}; store.setUsers(users); const el=$('#editMsg'); if(el) el.textContent='บันทึกแล้ว (local)'; renderProfile(); setTimeout(()=>{ $('#editProfileCard').classList.add('hidden'); const el=$('#editMsg'); if(el) el.textContent=''; },800); });
+
+    // ===== Events (simulate until device input is wired) =====
+    const eventTable=$('#eventTable');
+    function pushEvent(type, detail){ const ev={id:crypto.randomUUID(),time:Date.now(),type,detail}; const list=store.getEvents(); list.unshift(ev); store.setEvents(list.slice(0,100)); renderEvents(); updateRealtimeUI(); }
+    function renderEvents(){ const rows=store.getEvents().map(ev=>`<tr><td>${fmtTime(new Date(ev.time))}</td><td>${ev.type}</td><td>${ev.detail}</td></tr>`).join(''); eventTable.innerHTML=rows || `<tr><td colspan="3" class="muted">ยังไม่มีเหตุการณ์</td></tr>`; }
+    function updateRealtimeUI(){ const list=store.getEvents(); const last=list[0]; const lastUpdatedEl=$('#lastUpdated'); if(lastUpdatedEl) lastUpdatedEl.textContent='อัปเดตล่าสุด: '+fmtTime(); const banner=$('#realtimeBanner'); const isDanger=!!(last && last.type==='แจ้งเตือนควันบุหรี่'); banner?.classList.toggle('danger',isDanger); banner?.classList.toggle('ok',!isDanger); const titleEl=$('#bannerTitle'); const detailEl=$('#bannerDetail'); if(isDanger){ if(titleEl) titleEl.textContent='ตรวจพบควันบุหรี่!'; if(detailEl) detailEl.textContent=`${last.detail} (${fmtTime(new Date(last.time))})`; } else { if(titleEl) titleEl.textContent='ปลอดภัย'; if(detailEl) detailEl.textContent='ไม่พบเหตุการณ์ผิดปกติ'; } }
+    $('#btnSimSmoke').addEventListener('click',()=>pushEvent('แจ้งเตือนควันบุหรี่','จำลองเหตุการณ์จากปุ่มทดสอบ'));
+    $('#btnSimNormal').addEventListener('click',()=>pushEvent('สถานะระบบ','จำลองกลับสู่ปกติ'));
+
+    function assertGAS(){ if(!GAS_URL || GAS_URL==='YOUR_APPS_SCRIPT_WEB_APP_URL') throw new Error('ยังไม่ได้ตั้งค่า GAS_URL'); }
+
+    // ===== Tests =====
+    function addResult(ok, name, msg){ const li=document.createElement('li'); li.className=ok?'pass':'fail'; li.textContent=(ok?'✅ ':'❌ ')+name+(msg?' — '+msg:''); $('#testList').appendChild(li); }
+    function test(name, fn){ try{ Promise.resolve(fn()).then(()=>addResult(true,name)).catch(e=>{console.error(e);addResult(false,name,e.message)}) } catch(e){ console.error(e); addResult(false,name,e.message) } }
+
+    (function init(){ renderProfile(); renderEvents(); showView('signup'); if(store.getEvents().length===0){ pushEvent('สถานะระบบ','เริ่มต้นระบบ'); }
+      test('Elements exist',()=>{ ['#signupMsg','#loginMsg','#editMsg','#eventTable','#realtimeBanner','#lastUpdated','#bannerTitle','#bannerDetail'].forEach(sel=>{ if(!$(sel)) throw new Error(sel+' not found'); }); });
+      test('updateRealtimeUI() safe/danger/safe',()=>{ store.setEvents([]); renderEvents(); updateRealtimeUI(); pushEvent('แจ้งเตือนควันบุหรี่','test'); updateRealtimeUI(); pushEvent('สถานะระบบ','ok'); updateRealtimeUI(); });
+      test('GAS_URL configured',()=>{ assertGAS(); });
+    })();
+  </script>
+</body>
+</html>
+
+<!-- ===================== GOOGLE APPS SCRIPT (Server) =====================
+1) ไปที่ https://script.google.com/ > New project
+2) สร้างไฟล์ Code.gs แล้ววางโค้ดด้านล่างนี้
+3) ใส่ค่า SPREADSHEET_ID และ DRIVE_FOLDER_ID ให้ตรงตามที่คุณให้มา
+   - Spreadsheet ID: 17py6UIWFaYvuKJ_reLNGOJ3EcYU4PeEDh66dSmtrmeY  (ชีท: Data)
+   - Drive Folder ID: 1gUXO-ix1AARfzA8b5EiOTSPYBjrPwKge
+4) Deploy > New deployment > Type: Web app > Execute as: Me > Who has access: Anyone with the link
+5) เอา URL มาวางในตัวแปร GAS_URL ที่ด้านบนของไฟล์ HTML
+-->
+
+/** @OnlyCurrentDoc */
+const SPREADSHEET_ID = '17py6UIWFaYvuKJ_reLNGOJ3EcYU4PeEDh66dSmtrmeY';
+const SHEET_NAME     = 'Data';
+const DRIVE_FOLDER_ID= '1gUXO-ix1AARfzA8b5EiOTSPYBjrPwKge';
+
+function doOptions(e){ return _cors(); }
+function doGet(e){ return ContentService.createTextOutput(JSON.stringify({ok:true,message:'OK'})).setMimeType(ContentService.MimeType.JSON).setHeaders(_corsHeaders()); }
+function doPost(e){ try{
+  const data = JSON.parse(e.postData.contents);
+  if(data.action==='register') return _register(data);
+  if(data.action==='login')    return _login(data);
+  return _json({ok:false,error:'Unknown action'});
+} catch(err){ return _json({ok:false,error:String(err)}); } }
+
+function _register(data){
+  // data: {username, passHash, email, place, attachment:{name,type,size,base64}}
+  const ss=SpreadsheetApp.openById(SPREADSHEET_ID); const sh=ss.getSheetByName(SHEET_NAME) || ss.insertSheet(SHEET_NAME);
+  let fileId='', fileUrl='';
+  if(data.attachment && data.attachment.base64){
+    const folder=DriveApp.getFolderById(DRIVE_FOLDER_ID);
+    const blob=Utilities.newBlob(Utilities.base64Decode(data.attachment.base64), data.attachment.type||'application/octet-stream', data.attachment.name||('upload_'+Date.now()));
+    const f=folder.createFile(blob); fileId=f.getId(); fileUrl=f.getUrl();
+  }
+  const id = Utilities.getUuid();
+  const ts = new Date();
+  // เขียนหัวตารางถ้ายังไม่มี
+  if(sh.getLastRow()===0){ sh.appendRow(['timestamp','id','username','passHash','email','place','fileId','fileUrl','fileName','fileType','fileSize']); }
+  sh.appendRow([ts, id, data.username||'', data.passHash||'', data.email||'', data.place||'', fileId, fileUrl, data.attachment?.name||'', data.attachment?.type||'', data.attachment?.size||0]);
+  return _json({ok:true,id, fileId, fileUrl});
+}
+
+function _login(data){
+  // ตรวจสอบด้วย passHash
+  const ss=SpreadsheetApp.openById(SPREADSHEET_ID); const sh=ss.getSheetByName(SHEET_NAME);
+  if(!sh) return _json({ok:false,error:'Sheet not found'});
+  const values=sh.getDataRange().getValues();
+  const header=values.shift();
+  const idxUser=header.indexOf('username'); const idxHash=header.indexOf('passHash'); const idxId=header.indexOf('id');
+  if(idxUser<0||idxHash<0||idxId<0) return _json({ok:false,error:'Columns missing'});
+  for(const row of values){ if(String(row[idxUser])===String(data.username) && String(row[idxHash])===String(data.passHash)){ return _json({ok:true,id:row[idxId],username:data.username}); } }
+  return _json({ok:false,error:'Invalid credentials'});
+}
+
+function _json(obj){ return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON).setHeaders(_corsHeaders()); }
+function _cors(){ return HtmlService.createHtmlOutput('').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL); }
+function _corsHeaders(){ return { 'Access-Control-Allow-Origin':'*', 'Access-Control-Allow-Methods':'GET,POST,OPTIONS', 'Access-Control-Allow-Headers':'Content-Type' }; }
